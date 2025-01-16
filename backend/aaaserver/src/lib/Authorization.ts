@@ -4,8 +4,21 @@ import { Request, Response } from 'express';
 import {accounting} from "./Accounting";
 import config from "nconf";
 
+interface AccessTokenPayload {
+  name: string;
+  role: number;
+}
+
+interface RefreshTokenPayload {
+  loginName: string;
+}
+
+const HTTP_STATUS = {
+  FORBIDDEN: 403,
+  INTERNAL_SERVER_ERROR: 500,
+};
+
 class Authorization {
-  #error = "";
   #accessTokenPrivateKey = "";
   #accessTokenPublicKey = "";
   #refreshTokenPrivateKey = "";
@@ -20,27 +33,24 @@ class Authorization {
       this.#refreshTokenPrivateKey = fs.readFileSync(config.get("jwt:refreshTokenPrivateKeyFileName"), "utf8");
       this.#refreshTokenPublicKey = fs.readFileSync(config.get("jwt:refreshTokenPublicKeyFileName"), "utf8");
     }catch (err) {
-      this.#error = "Cannot read keys.";
+      console.log("Cannot read keys.");
     }
   }
-  get error(){
-    return this.#error;
-  }
   getAccessToken(name:string, role:number){
-    const payload = { name , role};
+    const payload:AccessTokenPayload = { name , role};
     return  jwt.sign(payload, this.#accessTokenPrivateKey,
       { expiresIn: this.#accessTokenExpiresInSec,  algorithm: "ES256" }
     );
   }
   getRefreshToken(name:string){
-    const payload = { loginName: name };
+    const payload :RefreshTokenPayload= { loginName: name };
     return  jwt.sign(payload, this.#refreshTokenPrivateKey,
       {  algorithm: "ES512" }
     );
   }
   verifyRefreshToken(refreshToken:string):string{
     try {
-      const payload = jwt.verify(refreshToken, this.#refreshTokenPublicKey);
+      const payload = jwt.verify(refreshToken, this.#refreshTokenPublicKey) as RefreshTokenPayload;
       if (typeof payload === "object" && payload !== null) {
         if ("loginName" in payload) {
           return payload.loginName;
@@ -48,16 +58,17 @@ class Authorization {
       }
     }
     catch (err){
+      console.log("Refresh token verify failed ");
     }
     return "";
   }
   setError403(res:Response){
-    res.status(403).json({
+    res.status(HTTP_STATUS.FORBIDDEN).json({
       success: false,
     });
   }
   setError500(res:Response){
-    res.status(500).json({
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       success: false,
     });
   }
@@ -73,31 +84,31 @@ class Authorization {
     let loginName = "";
     let refreshToken = req.cookies["refreshToken"];
     if (refreshToken) {
-      loginName = authorization.verifyRefreshToken(refreshToken)
+      loginName = this.verifyRefreshToken(refreshToken)
       if (loginName){
         const enabled = await accounting.isUserEnabled(loginName);
         if (enabled){
-          await authorization.setAccessTokenResponse(res,loginName);
+          await this.setAccessTokenResponse(res,loginName);
           return;
         }
         res.clearCookie("refreshToken");
-        authorization.setError403(res);
+        this.setError403(res);
         return;
       }
     }
     if ((req.sso.user === undefined) || (req.sso.user.name === undefined)) {
-      authorization.setError500(res);
+      this.setError500(res);
       return;
     }
     loginName = req.sso.user.name;
     const enabled = await accounting.isUserEnabled(loginName);
     if (enabled){
-      const refreshToken = authorization.getRefreshToken(loginName);
+      const refreshToken = this.getRefreshToken(loginName);
       res.cookie("refreshToken", refreshToken);
-      await authorization.setAccessTokenResponse(res,loginName);
+      await this.setAccessTokenResponse(res,loginName);
       return;
     }
-    authorization.setError403(res);
+    this.setError403(res);
   }
 }
 

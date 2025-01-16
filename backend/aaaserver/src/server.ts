@@ -8,7 +8,7 @@ app.use(cookieParser());
 app.use(sso.auth());
 const port = 3000;
 
-app.get("/", authorization.authorize);
+app.get("/", (req,res)=> authorization.authorize(req,res));
 
 app.listen(port, () => {
   console.log(`Server is running at http://localhost>:${port}`);
