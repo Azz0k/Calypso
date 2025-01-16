@@ -14,6 +14,7 @@ interface RefreshTokenPayload {
 }
 
 const HTTP_STATUS = {
+  UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   INTERNAL_SERVER_ERROR: 500,
 };
@@ -34,6 +35,7 @@ class Authorization {
       this.#refreshTokenPublicKey = fs.readFileSync(config.get("jwt:refreshTokenPublicKeyFileName"), "utf8");
     }catch (err) {
       console.log("Cannot read keys.");
+      process.exit(1);
     }
   }
   getAccessToken(name:string, role:number){
@@ -62,19 +64,20 @@ class Authorization {
     }
     return "";
   }
-  setError403(res:Response){
-    res.status(HTTP_STATUS.FORBIDDEN).json({
-      success: false,
-    });
-  }
-  setError500(res:Response){
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+  setError(res:Response,status:number){
+    res.status(status).json({
       success: false,
     });
   }
   async setAccessTokenResponse(res:Response, loginName:string){
-    const role = await accounting.getRole(loginName);
-    const accessToken = authorization.getAccessToken(loginName, role);
+    let accessToken = "";
+    try{
+      const role = await accounting.getRole(loginName);
+      accessToken = authorization.getAccessToken(loginName, role);
+    }catch (err){
+      this.setError(res,HTTP_STATUS.INTERNAL_SERVER_ERROR);
+      return;
+    }
     res.json({
       success: true,
       token: accessToken,
@@ -91,7 +94,7 @@ class Authorization {
 
     }else{
       res.clearCookie("refreshToken");
-      this.setError403(res);
+      this.setError(res,HTTP_STATUS.FORBIDDEN);
     }
   }
   async authorize(req: Request, res: Response) {
@@ -104,11 +107,12 @@ class Authorization {
         return;
       }
     }
-    if ((req.sso.user === undefined) || (req.sso.user.name === undefined)) {
-      this.setError500(res);
+    const ssoUser = req.sso?.user;
+    if (!ssoUser?.name) {
+      this.setError(res, HTTP_STATUS.INTERNAL_SERVER_ERROR);
       return;
     }
-    loginName = req.sso.user.name;
+    loginName = ssoUser.name;
     await this.validateUserAndGenerateResponse(res, loginName, "");
   }
 }
