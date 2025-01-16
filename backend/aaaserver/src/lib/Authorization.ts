@@ -80,19 +80,27 @@ class Authorization {
       token: accessToken,
     });
   }
+  async validateUserAndGenerateResponse(res:Response, loginName: string, oldRefreshToken:string){
+    const enabled = await accounting.isUserEnabled(loginName);
+    if (enabled){
+      if (!oldRefreshToken){
+        const refreshToken = this.getRefreshToken(loginName);
+        res.cookie("refreshToken", refreshToken);
+      }
+      await this.setAccessTokenResponse(res,loginName);
+
+    }else{
+      res.clearCookie("refreshToken");
+      this.setError403(res);
+    }
+  }
   async authorize(req: Request, res: Response) {
     let loginName = "";
     let refreshToken = req.cookies["refreshToken"];
     if (refreshToken) {
       loginName = this.verifyRefreshToken(refreshToken)
       if (loginName){
-        const enabled = await accounting.isUserEnabled(loginName);
-        if (enabled){
-          await this.setAccessTokenResponse(res,loginName);
-          return;
-        }
-        res.clearCookie("refreshToken");
-        this.setError403(res);
+        await this.validateUserAndGenerateResponse(res,loginName, refreshToken);
         return;
       }
     }
@@ -101,14 +109,7 @@ class Authorization {
       return;
     }
     loginName = req.sso.user.name;
-    const enabled = await accounting.isUserEnabled(loginName);
-    if (enabled){
-      const refreshToken = this.getRefreshToken(loginName);
-      res.cookie("refreshToken", refreshToken);
-      await this.setAccessTokenResponse(res,loginName);
-      return;
-    }
-    this.setError403(res);
+    await this.validateUserAndGenerateResponse(res, loginName, "");
   }
 }
 
