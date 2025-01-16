@@ -1,0 +1,5 @@
+Generating keys:
+openssl ecparam -genkey -name prime256v1 -noout -out private.key
+openssl ec -in private.key -pubout -out public.key
+openssl ecparam -genkey -name secp521r1 -noout -out private512.key
+openssl ec -in private512.key -pubout -out public512.key

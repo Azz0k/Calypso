@@ -2,66 +2,103 @@ import fs from "node:fs";
 import jwt from "jsonwebtoken";
 import { Request, Response } from 'express';
 import {accounting} from "./Accounting";
+import config from "nconf";
 
 class Authorization {
   #error = "";
-  #privateKey = "";
-  //#publicKey = "";
-  #accounting = accounting;
+  #accessTokenPrivateKey = "";
+  #accessTokenPublicKey = "";
+  #refreshTokenPrivateKey = "";
+  #refreshTokenPublicKey = "";
+  #accessTokenExpiresInSec = 600;
   constructor() {
+    config.file("./config.json");
+    this.#accessTokenExpiresInSec = config.get("jwt:accessTokenExpiresInSec");
     try{
-      this.#privateKey = fs.readFileSync("./private.key", "utf8");
+      this.#accessTokenPrivateKey = fs.readFileSync(config.get("jwt:accessTokenPrivateKeyFileName"), "utf8");
+      this.#accessTokenPublicKey = fs.readFileSync(config.get("jwt:accessTokenPublicKeyFileName"), "utf8");
+      this.#refreshTokenPrivateKey = fs.readFileSync(config.get("jwt:refreshTokenPrivateKeyFileName"), "utf8");
+      this.#refreshTokenPublicKey = fs.readFileSync(config.get("jwt:refreshTokenPublicKeyFileName"), "utf8");
     }catch (err) {
-      this.#error = "Cannot read private key.";
+      this.#error = "Cannot read keys.";
     }
   }
   get error(){
     return this.#error;
   }
-  token(name:string, role:number){
+  getAccessToken(name:string, role:number){
     const payload = { name , role};
-    return  jwt.sign(payload, this.#privateKey, { expiresIn: 600,  algorithm: "ES256" });
+    return  jwt.sign(payload, this.#accessTokenPrivateKey,
+      { expiresIn: this.#accessTokenExpiresInSec,  algorithm: "ES256" }
+    );
   }
-  async authorize(req: Request, res: Response) {
-    //await accounting.enableUser("milokum.pavel");
-    let role:number = parseInt(req.cookies["role"]);
-    let name = req.cookies["loginName"];
-    let isSuccess = true;
-    let errorMessages: string[] = [];
-    if (isNaN(role)){
-      if ((req.sso.user !== undefined) && (req.sso.user.name !== undefined)) {
-        name = req.sso.user.name;
-      } else {
-        isSuccess = false;
-        errorMessages.push("Authentication failed");
+  getRefreshToken(name:string){
+    const payload = { loginName: name };
+    return  jwt.sign(payload, this.#refreshTokenPrivateKey,
+      {  algorithm: "ES512" }
+    );
+  }
+  verifyRefreshToken(refreshToken:string):string{
+    try {
+      const payload = jwt.verify(refreshToken, this.#refreshTokenPublicKey);
+      if (typeof payload === "object" && payload !== null) {
+        if ("loginName" in payload) {
+          return payload.loginName;
+        }
       }
-      role = await accounting.getRole(name);
     }
-    const enabled = await accounting.isUserEnabled(name);
-    if (!enabled || !isSuccess){
-      errorMessages.push("You are not allowed to access");
-      res.clearCookie("loginName");
-      res.clearCookie("role");
-      res.json({
-        success: false,
-        errorMessages: errorMessages,
-      });
-      return;
+    catch (err){
     }
-    const token = authorization.token(name, role);
-    if (authorization.error) {
-      isSuccess = false;
-      errorMessages.push(authorization.error);
-    }
-    res.cookie("loginName", name, { httpOnly: true });
-    res.cookie("role", role, { httpOnly: true });
-    res.json({
-      success: isSuccess,
-      token: token,
-      errorMessages: errorMessages,
+    return "";
+  }
+  setError403(res:Response){
+    res.status(403).json({
+      success: false,
     });
   }
-
+  setError500(res:Response){
+    res.status(500).json({
+      success: false,
+    });
+  }
+  async setAccessTokenResponse(res:Response, loginName:string){
+    const role = await accounting.getRole(loginName);
+    const accessToken = authorization.getAccessToken(loginName, role);
+    res.json({
+      success: true,
+      token: accessToken,
+    });
+  }
+  async authorize(req: Request, res: Response) {
+    let loginName = "";
+    let refreshToken = req.cookies["refreshToken"];
+    if (refreshToken) {
+      loginName = authorization.verifyRefreshToken(refreshToken)
+      if (loginName){
+        const enabled = await accounting.isUserEnabled(loginName);
+        if (enabled){
+          await authorization.setAccessTokenResponse(res,loginName);
+          return;
+        }
+        res.clearCookie("refreshToken");
+        authorization.setError403(res);
+        return;
+      }
+    }
+    if ((req.sso.user === undefined) || (req.sso.user.name === undefined)) {
+      authorization.setError500(res);
+      return;
+    }
+    loginName = req.sso.user.name;
+    const enabled = await accounting.isUserEnabled(loginName);
+    if (enabled){
+      const refreshToken = authorization.getRefreshToken(loginName);
+      res.cookie("refreshToken", refreshToken);
+      await authorization.setAccessTokenResponse(res,loginName);
+      return;
+    }
+    authorization.setError403(res);
+  }
 }
 
 export const authorization = new Authorization();

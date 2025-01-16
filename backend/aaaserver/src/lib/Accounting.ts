@@ -44,7 +44,6 @@ class Accounting{
     const dbHost = config.get("database:host");
     const database = config.get("database:database");
     this.#dbUri = `mongodb://${dbLogin}:${dbPassword}@${dbHost}/${database}`;
-    //console.log(this.#dbUri);
     connect(this.#dbUri).catch(() => this.#error = "Could not connect to MongoDB.");
   }
   get error(){
