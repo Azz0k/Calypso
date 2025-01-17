@@ -1,0 +1,185 @@
+<html><head><base href="." /><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    background: #2c3e50;
+    color: white;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.profile-section {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.profile-icon {
+    width: 40px;
+    height: 40px;
+    background: #34495e;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.main-content {
+    display: flex;
+    flex: 1;
+}
+
+.sidebar {
+    background: #34495e;
+    width: 60px;
+    transition: width 0.3s ease;
+    overflow: hidden;
+}
+
+.sidebar:hover {
+    width: 250px;
+}
+
+.menu-item {
+    color: white;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.menu-item:hover {
+    background: #2c3e50;
+}
+
+.menu-item i {
+    font-size: 1.5rem;
+    min-width: 1.5rem;
+}
+
+.content {
+    flex: 1;
+    padding: 2rem;
+    background: #f5f6fa;
+}
+
+.status-bar {
+    background: #2c3e50;
+    color: white;
+    padding: 0.5rem 1rem;
+    display: flex;
+    justify-content: space-between;
+}
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header class="header">
+        <h1>Система управления</h1>
+        <div class="profile-section">
+            <span>Иван Иванов</span>
+            <div class="profile-icon">
+                <i class="fas fa-user"></i>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-content">
+        <nav class="sidebar">
+            <div class="menu-item">
+                <i class="fas fa-home"></i>
+                <span>Главная</span>
+            </div>
+            <div class="menu-item">
+                <i class="fas fa-chart-bar"></i>
+                <span>Статистика</span>
+            </div>
+            <div class="menu-item">
+                <i class="fas fa-users"></i>
+                <span>Пользователи</span>
+            </div>
+            <div class="menu-item">
+                <i class="fas fa-cog"></i>
+                <span>Настройки</span>
+            </div>
+            <div class="menu-item">
+                <i class="fas fa-question-circle"></i>
+                <span>Помощь</span>
+            </div>
+        </nav>
+
+        <main class="content">
+            <h2>Добро пожаловать в систему</h2>
+            <p>Выберите пункт меню слева для начала работы</p>
+        </main>
+    </div>
+
+    <footer class="status-bar">
+        <div>Статус: Онлайн</div>
+        <div>Версия: 1.0.0</div>
+    </footer>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const menuItems = document.querySelectorAll('.menu-item');
+    
+    menuItems.forEach(item => {
+        item.addEventListener('click', function() {
+            // Удаляем активный класс у всех элементов
+            menuItems.forEach(i => i.style.background = '');
+            // Добавляем активный класс выбранному элементу
+            this.style.background = '#2c3e50';
+        });
+    });
+
+    const profileIcon = document.querySelector('.profile-icon');
+    profileIcon.addEventListener('click', function() {
+        const profileMenu = document.createElement('div');
+        profileMenu.style.position = 'absolute';
+        profileMenu.style.top = '60px';
+        profileMenu.style.right = '10px';
+        profileMenu.style.background = 'white';
+        profileMenu.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+        profileMenu.style.borderRadius = '4px';
+        profileMenu.style.padding = '10px';
+        
+        const menuItems = `
+            <div style="padding: 5px; cursor: pointer;">Профиль</div>
+            <div style="padding: 5px; cursor: pointer;">Настройки</div>
+            <div style="padding: 5px; cursor: pointer;">Выйти</div>
+        `;
+        
+        profileMenu.innerHTML = menuItems;
+        document.body.appendChild(profileMenu);
+        
+        // Закрываем меню при клике вне его
+        const closeMenu = function(e) {
+            if (!profileMenu.contains(e.target) && !profileIcon.contains(e.target)) {
+                document.body.removeChild(profileMenu);
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        
+        setTimeout(() => {
+            document.addEventListener('click', closeMenu);
+        }, 0);
+    });
+});
+</script>
+</body></html>
